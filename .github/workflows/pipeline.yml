@@ -20,8 +20,9 @@ jobs:
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.4'
-          extensions: mbstring, xml, ctype, iconv, intl, pdo_mysql, openssl, tokenizer, fileinfo
+          php-version: "8.4"
+          extensions: mbstring, xml, ctype, iconv, intl, pdo_mysql, openssl, tokenizer,
+            fileinfo
           coverage: none
 
       - name: Copy env template for artisan commands
@@ -41,6 +42,7 @@ jobs:
 
       - name: Prepare deployment package
         run: |
+          rm -rf deploy
           mkdir deploy
           rsync -av \
             --exclude='.git' \
@@ -48,6 +50,7 @@ jobs:
             --exclude='node_modules' \
             --exclude='tests' \
             --exclude='.env' \
+            --exclude='deploy' \
             ./ deploy/
 
       - name: Deploy to Azure Web App
