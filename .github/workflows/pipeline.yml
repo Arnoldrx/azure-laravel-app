@@ -1,4 +1,4 @@
-name: Deploy Laravel backend to Azure App Service
+name: Build and deploy Laravel to Azure App Service
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
 
     steps:
@@ -20,42 +20,63 @@ jobs:
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: "8.4"
-          extensions: mbstring, xml, ctype, iconv, intl, pdo_mysql, openssl, tokenizer,
-            fileinfo
+          php-version: '8.3'
+          extensions: mbstring, xml, ctype, iconv, intl, pdo_mysql, openssl, tokenizer, fileinfo
           coverage: none
 
-      - name: Copy env template for artisan commands
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Copy env for build-time artisan commands
         run: cp .env.example .env
 
       - name: Install Composer dependencies
         run: composer install --no-dev --prefer-dist --optimize-autoloader
 
-      - name: Generate temporary app key for build-time artisan use
+      - name: Generate app key
         run: php artisan key:generate
 
-      - name: Clear cached config
-        run: |
-          php artisan config:clear
-          php artisan route:clear
-          php artisan view:clear
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build frontend assets
+        run: npm run build
 
       - name: Prepare deployment package
         run: |
-          rm -rf deploy
           mkdir deploy
-          rsync -av \
-            --exclude='.git' \
-            --exclude='.github' \
-            --exclude='node_modules' \
-            --exclude='tests' \
-            --exclude='.env' \
-            --exclude='deploy' \
-            ./ deploy/
+          rsync -av --exclude='.git' \
+                    --exclude='.github' \
+                    --exclude='node_modules' \
+                    --exclude='tests' \
+                    --exclude='.env' \
+                    ./ deploy/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: laravel-app
+          path: deploy
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    environment:
+      name: production
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: laravel-app
+          path: .
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
-          app-name: arnoldrx-laravel-app
+          app-name: arnold-laravel-app
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          package: ./deploy
+          package: .
